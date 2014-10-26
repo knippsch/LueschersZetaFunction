@@ -200,15 +200,20 @@ def A(q, gamma, l, m, d, theta, precision, verbose):
 ################################################################################
 def B(q, gamma, l, precision, verbose):
   if l is not 0:
-    return 0.0
+    return 0.0 
   else:
     a = 2.*scipy.special.sph_harm(0, 0, 0.0, 0.0)*gamma*math.pow(math.pi, 3./2.)
     # The integral gives [2*(exp(q)*DawsonF(sqrt(q))/sqrt(q)] for Lambda = 1
-    b = q * 2.*np.exp(q)*scipy.special.dawsn(cmath.sqrt(q))/cmath.sqrt(q)
+    # The Dawson function is only available in scipy 0.13 or so, so it is
+    # replaced by a representation with the Gaussian error function.
+    dawson = -1.j*np.sqrt(math.pi) * np.exp(-q) * \
+             scipy.special.erf(1.j*cmath.sqrt(q)) / 2.
+    b = q * 2.*np.exp(q)*dawson/cmath.sqrt(q)
     c = math.exp(q)
     if verbose:
       print 'Term B:', a*(b-c)
     return a*(b-c)
+
 
 # Computes the term gamma*w and returns the result in spherical coordinates
 ################################################################################
@@ -240,7 +245,7 @@ def compute_summands_C(w_sph, w, q, gamma, l, m, d, precision):
   part2 = []
   for ww in w_sph:
     part2.append((scipy.integrate.quadrature(integrand, 0., 1., \
-                  args=[q, l, ww[0]], tol = precision*0.1, maxiter=1000))[0])
+                  args=(q, l, ww[0]), tol = precision*0.1, maxiter=1000))[0])
   part2 = np.asarray(part2, dtype=float)
   # return the result
   return np.dot(part1, part2)
@@ -320,5 +325,4 @@ def test():
   if delta < 0:
     delta = 180+delta
   print 'delta:', delta, 'delta should be: 128'
-
 
