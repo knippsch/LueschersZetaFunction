@@ -30,13 +30,11 @@
 # Performed tests:
 # 1.) Against Mathematica code provided by Liuming Liu w. and w.o. tbc in cms
 #     and l=0, m=0 
-#     NOTIFIATION: Up to now, there is still some numerical difference in the
-#                  two implementations on the third or fourth digit. This is
-#                  not understood yet!
 # 2.) Against data from arXiv:1107.5023v2 w. and w.o. moving frames and l=0, m=0
 # 3.) Against data from arXiv:1011.5288 w. and w.0. moving frames and linear 
-#     combinations of l=2, m=-2,0,2. See the test function at the very end of
-#     this file.
+#     combinations of l=2, m=-2,0,2. 
+#
+#  See the test function at the very end of this file for more information!
 #
 ################################################################################
 
@@ -52,14 +50,14 @@ import scipy.integrate
 #
 # This is the ONLY function which should and needs to be called from outside.
 #
-# input: q        : scattering momentum fraction, ONLY MANDATORY INPUT PARAMETER
+# input: q2       : (IMPORTANT:) SQUARED scattering momentum fraction, ONLY 
+#                   MANDATORY INPUT PARAMETER !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #        gamma    : Lorentz factor for moving frames, see e.g. arXiv:1011.5288
 #        l        : orbital quantum number
 #        m        : magnetic quantum number
-#        d        : total three momentum of the system
-#        theta    : twist angle. IMPORTANT: It is not intended to use tbc with 
-#                   moving frames yet. The twist angle theta shall only be 
-#                   different from zero if d=(0,0,0)!
+#        d        : total three momentum of the system. (TBC: d can be used as 
+#                   a twist angle as well. The correspondance is:
+#                          d = -theta/pi     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #        precision: precision of the calculation
 #        verbose  : 0, no output on screen; 1, detailed output with convergence
 #                   informations 
@@ -70,20 +68,16 @@ import scipy.integrate
 #                equation (5) in arXiv:1107.5023v2.
 #
 ################################################################################
-def Z(q, gamma = 1.0, l = 0, m = 0, d = np.array([0., 0., 0.]), \
-      theta = np.array([0., 0., 0.]),  precision = 10e-6, verbose = 0):
+def Z(q2, gamma = 1.0, l = 0, m = 0, d = np.array([0., 0., 0.]), \
+      precision = 10e-6, verbose = 0):
   # some small checks
-  if ((np.dot(d,d) != 0.) and (np.dot(theta,theta) != 0.)):
-    print 'TBC and moving frames is not supported'
-    exit(0)
   if gamma < 1.0:
     print 'Gamma must be larger or equal to 1.0'
     exit(0)
   # the computation
-  theta = theta / (2.*math.pi)
-  res = A(q, gamma, l, m, d, theta, precision, verbose) + \
-        B(q, gamma, l, precision, verbose) + \
-        C(q, gamma, l, m, d, precision, verbose)
+  res = A(q2, gamma, l, m, d, precision, verbose) + \
+        B(q2, gamma, l, precision, verbose) + \
+        C(q2, gamma, l, m, d, precision, verbose)
   if verbose:
     print 'Luescher Zeta function:', res
   return res
@@ -153,31 +147,32 @@ def compute_summands_A(a_sph, q, l, m):
 
 # creates the momentum array used for the sums
 ################################################################################
-def create_momentum_array(q):
-  i = int(math.sqrt(q)+1)
+def create_momentum_array(p):
+  i = int(math.sqrt(p)+1)
   n = [j for j in xrange(-i,i+1)]
   r = cartesian((n, n, n))
   out = []
   for rr in r:
-    if (np.dot(rr, rr) == q):
+    if (np.dot(rr, rr) == p):
       out.append(np.ndarray.tolist(rr))
   out = np.asarray(out, dtype=float)
-  q += 1
+  p += 1
   # these momentum suqares do not exist
-  exclude = [7, 15, 23, 28, 31, 39, 47, 55, 60, 63, 71]
-  if q in exclude:
-    q += 1
-  if q > 72:
+  exclude = [7, 15, 23, 28, 31, 39, 47, 55, 60, 63, 71, 79, 92, 112, 124, 156, \
+             188, 220, 240, 252, 284, 316, 368, 448, 496, 624, 752, 880, 960]
+  if p in exclude:
+    p += 1
+  if p > 1007:
     print 'cannot converge, see zeta.py - create_momentum_array'
     exit(0)
-  return out, q
+  return out, p
 
 # Computation of term A
 ################################################################################
-def A(q, gamma, l, m, d, theta, precision, verbose):
+def A(q, gamma, l, m, d, precision, verbose):
   i = 0
   r, i = create_momentum_array(i)
-  r_sph = compute_r_in_spherical_coordinates(r+theta, d, gamma)
+  r_sph = compute_r_in_spherical_coordinates(r, d, gamma)
   result = compute_summands_A(r_sph, q, l, m)
   if verbose:
     print 'convergence in term A:'
@@ -186,7 +181,7 @@ def A(q, gamma, l, m, d, theta, precision, verbose):
   eps = 1
   while (eps > precision):
     r, i = create_momentum_array(i)
-    r_sph = compute_r_in_spherical_coordinates(r+theta, d, gamma)
+    r_sph = compute_r_in_spherical_coordinates(r, d, gamma)
     result_h = compute_summands_A(r_sph, q, l, m)
     eps = abs(result_h/result)
     result += result_h
@@ -239,13 +234,16 @@ integrand = lambda t, q, l, w: ((math.pi/t)**(3./2.+l) ) * \
 ################################################################################
 def compute_summands_C(w_sph, w, q, gamma, l, m, d, precision):
   part1 = gamma * (np.absolute(w_sph[:,0])**l) * \
-          np.exp((0.0-1.j)*math.pi*np.dot(w, d)) * \
+          np.exp((-1.j)*math.pi*np.dot(w, d)) * \
           scipy.special.sph_harm(m, l, w_sph[:,2], w_sph[:,1])
   # Factor two: The integral 
   part2 = []
   for ww in w_sph:
+    # the precision in this integral might be crucial at some point but it is
+    # very high right now with a standard of 1e-12. It should be enough
+    # for all comoputations. In doubt, please change it.
     part2.append((scipy.integrate.quadrature(integrand, 0., 1., \
-                  args=(q, l, ww[0]), tol = precision*0.1, maxiter=1000))[0])
+                  args=(q, l, ww[0]), tol = precision*1e-6, maxiter=1000))[0])
   part2 = np.asarray(part2, dtype=float)
   # return the result
   return np.dot(part1, part2)
