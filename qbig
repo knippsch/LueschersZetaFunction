@@ -135,6 +135,16 @@ def compute_r_in_spherical_coordinates(a, d, gamma):
       out[i,:] = (r_p-0.5*d)/gamma + r_o
   return appendSpherical_np(out)
 
+# Computes a part of the sum in term A
+################################################################################
+def compute_summands_A(a_sph, q, l, m): 
+  result = 0.0 
+  for r in a_sph:
+    result += (np.exp(-(r[0]**2.-q)) * r[0]**l) / (r[0]**2-q) * \
+              scipy.special.sph_harm(m, l, r[2], r[1]) 
+  return result
+
+
 # creates the momentum array used for the sums
 ################################################################################
 def create_momentum_array(p):
@@ -148,25 +158,14 @@ def create_momentum_array(p):
   out = np.asarray(out, dtype=float)
   p += 1
   # these momentum suqares do not exist
-  exclude = [7, 15, 23, 28, 31, 39, 47, 55, 60, 63, 71, 79, 87, 92, 95, 103, \
-             111, 112, 119, 124, 127, 135, 143, 151, 156, 159, 167, 175, 183,\
-             188, 191, 199, 207, 215, 220, 223, 231, 239, 240, 247, 252, 255,\
-             263, 271, 279, 284, 287, 295]
+  exclude = [7, 15, 23, 28, 31, 39, 47, 55, 60, 63, 71, 79, 92, 112, 124, 156, \
+             188, 220, 240, 252, 284, 316, 368, 448, 496, 624, 752, 880, 960]
   if p in exclude:
     p += 1
-  if p > 302:
+  if p > 1007:
     print 'cannot converge, see zeta.py - create_momentum_array'
     exit(0)
   return out, p
-
-# Computes a part of the sum in term A
-################################################################################
-def compute_summands_A(a_sph, q, l, m): 
-  result = 0.0 
-  for r in a_sph:
-    result += (np.exp(-(r[0]**2.-q)) * r[0]**l) / (r[0]**2-q) * \
-              scipy.special.sph_harm(m, l, r[2], r[1]) 
-  return result
 
 # Computation of term A
 ################################################################################
@@ -244,7 +243,7 @@ def compute_summands_C(w_sph, w, q, gamma, l, m, d, precision):
     # very high right now with a standard of 1e-12. It should be enough
     # for all comoputations. In doubt, please change it.
     part2.append((scipy.integrate.quadrature(integrand, 0., 1., \
-                  args=(q, l, ww[0]), tol = precision*0.1, maxiter=1000))[0])
+                  args=(q, l, ww[0]), tol = precision*1e-6, maxiter=1000))[0])
   part2 = np.asarray(part2, dtype=float)
   # return the result
   return np.dot(part1, part2)
@@ -326,3 +325,4 @@ def test():
   print 'delta:', delta, 'delta should be: 128'
 
 
+print Z(0.5, verbose = 1)
