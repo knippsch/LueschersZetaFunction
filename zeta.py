@@ -74,10 +74,12 @@ def Z(q2, gamma = 1.0, l = 0, m = 0, d = np.array([0., 0., 0.]), \
   if gamma < 1.0:
     print 'Gamma must be larger or equal to 1.0'
     exit(0)
+  # reading the three momenta for summation from file
+  n = np.load("./momenta.npy")
   # the computation
-  res = A(q2, gamma, l, m, d, precision, verbose) + \
+  res = A(q2, gamma, l, m, d, precision, verbose, n) + \
         B(q2, gamma, l, precision, verbose) + \
-        C(q2, gamma, l, m, d, precision, verbose)
+        C(q2, gamma, l, m, d, precision, verbose, n)
   if verbose:
     print 'Luescher Zeta function:', res
   return res
@@ -101,24 +103,6 @@ def appendSpherical_np(xyz):
     ptsnew[:,2] = np.arctan2(xyz[:,1], xyz[:,0])
     return ptsnew
 
-# Gives an array of 3d vectors for summation
-################################################################################
-def cartesian(arrays, out=None):
-    arrays = [np.asarray(x) for x in arrays]
-    dtype = arrays[0].dtype
-
-    n = np.prod([x.size for x in arrays])
-    if out is None:
-        out = np.zeros([n, len(arrays)], dtype=dtype)
-
-    m = n / arrays[0].size
-    out[:,0] = np.repeat(arrays[0], m)
-    if arrays[1:]:
-        cartesian(arrays[1:], out=out[0:m,1:])
-        for j in xrange(1, arrays[0].size):
-            out[j*m:(j+1)*m,1:] = out[0:m,1:]
-    return out
-
 # Computes the vector r for the sum in term A and returns it in spherical 
 # coordinates 
 ################################################################################
@@ -135,44 +119,64 @@ def compute_r_in_spherical_coordinates(a, d, gamma):
       out[i,:] = (r_p-0.5*d)/gamma + r_o
   return appendSpherical_np(out)
 
-# creates the momentum array used for the sums
+# compute spherical harmonics
 ################################################################################
-def create_momentum_array(p):
-  i = int(math.sqrt(p)+1)
-  n = [j for j in xrange(-i,i+1)]
-  r = cartesian((n, n, n))
-  out = []
-  for rr in r:
-    if (np.dot(rr, rr) == p):
-      out.append(np.ndarray.tolist(rr))
-  out = np.asarray(out, dtype=float)
-  p += 1
-  # these momentum suqares do not exist
-  exclude = [7, 15, 23, 28, 31, 39, 47, 55, 60, 63, 71, 79, 87, 92, 95, 103, \
-             111, 112, 119, 124, 127, 135, 143, 151, 156, 159, 167, 175, 183,\
-             188, 191, 199, 207, 215, 220, 223, 231, 239, 240, 247, 252, 255,\
-             263, 271, 279, 284, 287, 295]
-  if p in exclude:
+def sph_harm(m = 0, l = 0, phi = 0, theta = 0):
+  if l is 0 and m is 0:
+    return 0.28209479177387814
+  elif l is 1 and m is -1:
+    return 0.3454941494713355*np.sin(theta)*np.exp(-1.j*phi)
+  elif l is 1 and m is  0:
+    return 0.48860251190291992*np.cos(theta)
+  elif l is 1 and m is  1:
+    return -0.3454941494713355*np.sin(theta)*np.exp(1.j*phi)
+  elif l is 2 and m is -2:
+    return 0.38627420202318957*np.sin(theta)*np.sin(theta) * np.exp(-2.*1.j*phi)
+  elif l is 2 and m is  0:
+    return 0.31539156525252005*(3.*np.cos(theta)*np.cos(theta) - 1.)
+  elif l is 2 and m is  2:
+    return 0.38627420202318957*np.sin(theta)*np.sin(theta) * np.exp(2.*1.j*phi)
+  else:
+    return scipy.special.sph_harm(m, l, theta, phi)
+
+# returns the part of the momentum array for a given momentum squared
+################################################################################
+def return_momentum_array(p, n):
+  if len(n[p,0]) is 0:
     p += 1
-  if p > 302:
-    print 'cannot converge, see zeta.py - create_momentum_array'
-    exit(0)
+  out = n[p, 0]
+  p += 1
   return out, p
 
 # Computes a part of the sum in term A
 ################################################################################
 def compute_summands_A(a_sph, q, l, m): 
-  result = 0.0 
+  inter = []
+  counter = 0
   for r in a_sph:
-    result += (np.exp(-(r[0]**2.-q)) * r[0]**l) / (r[0]**2-q) * \
-              scipy.special.sph_harm(m, l, r[2], r[1]) 
+    breaker = 0
+    if counter > 0: # one way to avoid double computation
+      for i in range(0, counter):
+        if abs(float(r[0]) - float(a_sph[i, 0])) < 1e-8:
+          inter.append(inter[i])
+          breaker = 1
+          break
+    if breaker == 0:
+      inter.append((np.exp(-(r[0]**2.-q)) * r[0]**l) / (r[0]**2-q))
+    counter += 1
+
+  result = 0.0 
+  counter = 0
+  for r in a_sph:
+    result += inter[counter]*sph_harm(m, l, r[2], r[1]) 
+    counter += 1
   return result
 
 # Computation of term A
 ################################################################################
-def A(q, gamma, l, m, d, precision, verbose):
+def A(q, gamma, l, m, d, precision, verbose, n):
   i = 0
-  r, i = create_momentum_array(i)
+  r, i = return_momentum_array(i, n)
   r_sph = compute_r_in_spherical_coordinates(r, d, gamma)
   result = compute_summands_A(r_sph, q, l, m)
   if verbose:
@@ -181,7 +185,7 @@ def A(q, gamma, l, m, d, precision, verbose):
   # computing new sums until precision is reached
   eps = 1
   while (eps > precision):
-    r, i = create_momentum_array(i)
+    r, i = return_momentum_array(i, n)
     r_sph = compute_r_in_spherical_coordinates(r, d, gamma)
     result_h = compute_summands_A(r_sph, q, l, m)
     eps = abs(result_h/result)
@@ -210,7 +214,6 @@ def B(q, gamma, l, precision, verbose):
       print 'Term B:', a*(b-c)
     return a*(b-c)
 
-
 # Computes the term gamma*w and returns the result in spherical coordinates
 ################################################################################
 def compute_gamma_w_in_spherical_coordinates(a, d, gamma):
@@ -228,32 +231,42 @@ def compute_gamma_w_in_spherical_coordinates(a, d, gamma):
 
 # Just the integrand of term C
 ################################################################################
-integrand = lambda t, q, l, w: ((math.pi/t)**(3./2.+l) ) * \
-                               np.exp(q*t-(math.pi)**2.*w*w/t)
+integrand = lambda t, q, l, w: ((math.pi/t)**(3./2.+l) ) * np.exp(q*t-w/t)
 
 # Computes a part of the sum in term C
 ################################################################################
 def compute_summands_C(w_sph, w, q, gamma, l, m, d, precision):
   part1 = gamma * (np.absolute(w_sph[:,0])**l) * \
           np.exp((-1.j)*math.pi*np.dot(w, d)) * \
-          scipy.special.sph_harm(m, l, w_sph[:,2], w_sph[:,1])
+          sph_harm(m, l, w_sph[:,2], w_sph[:,1])
   # Factor two: The integral 
   part2 = []
+  counter = 0
   for ww in w_sph:
-    # the precision in this integral might be crucial at some point but it is
-    # very high right now with a standard of 1e-12. It should be enough
-    # for all comoputations. In doubt, please change it.
-    part2.append((scipy.integrate.quadrature(integrand, 0., 1., \
-                  args=(q, l, ww[0]), tol = precision*0.1, maxiter=1000))[0])
+    breaker = 0
+    if counter > 0: # one way to avoid double computation
+      for i in range(0, counter):
+        if abs(float(ww[0]) - float(w_sph[i, 0])) < 1e-8:
+          part2.append(part2[i])
+          breaker = 1
+          break
+    if breaker == 0:
+      # the precision in this integral might be crucial at some point but it is
+      # rather high right now with a standard of 1e-8. It should be enough
+      # for all comoputations. In doubt, please change it.
+      part2.append((scipy.integrate.quadrature(integrand, 0., 1., \
+                    args=(q, l, (math.pi*ww[0])**2), tol = precision*0.1, \
+                    maxiter=1000))[0])
+    counter += 1
   part2 = np.asarray(part2, dtype=float)
   # return the result
   return np.dot(part1, part2)
 
 # Computation of term C
 ################################################################################
-def C(q, gamma, l, m, d, precision, verbose):
+def C(q, gamma, l, m, d, precision, verbose, n):
   i = 1
-  w, i = create_momentum_array(i)
+  w, i = return_momentum_array(i, n)
   w_sph = compute_gamma_w_in_spherical_coordinates(w, d, gamma)
   result = compute_summands_C(w_sph, w, q, gamma, l, m, d, precision)
   if verbose:
@@ -262,7 +275,7 @@ def C(q, gamma, l, m, d, precision, verbose):
   # computing new sums until precision is reached
   eps = 1
   while (eps > precision):
-    w, i = create_momentum_array(i)
+    w, i = return_momentum_array(i, n)
     w_sph = compute_gamma_w_in_spherical_coordinates(w, d, gamma)
     result_h = compute_summands_C(w_sph, w, q, gamma, l, m, d, precision)
     eps = abs(result_h/result)
@@ -285,7 +298,7 @@ def test():
   delta = np.arctan(math.pi**(3./2.)*q/zeta)*180./math.pi
   if delta < 0:
     delta = 180+delta
-  print 'delta:', delta, 'delta should be: 137'
+  print 'delta:', delta, 'delta should be: 136.6527'
   
   # mv1 ##########################
   print '\nTest in mv1:'
@@ -302,7 +315,7 @@ def test():
           (Z00 + (2./(q*q*math.sqrt(5)))*Z20))*180./math.pi
   if delta < 0:
     delta = 180+delta
-  print 'delta:', delta, 'delta should be: 116'
+  print 'delta:', delta, 'delta should be: 115.7653'
   
   
   # mv2 ##########################
@@ -323,6 +336,10 @@ def test():
           + ((math.sqrt(3./10.)/(q*q))*(Z22-Z2_2))))*180./math.pi
   if delta < 0:
     delta = 180+delta
-  print 'delta:', delta, 'delta should be: 128'
+  print 'delta:', delta, 'delta should be: 127.9930'
 
-
+#test()
+counter = 0
+for qq in np.arange(0.00, 0.999, 0.001):
+  print counter, Z(qq)
+  counter += 1
