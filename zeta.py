@@ -58,6 +58,9 @@ import scipy.integrate
 #        d        : total three momentum of the system. (TBC: d can be used as 
 #                   a twist angle as well. The correspondance is:
 #                          d = -theta/pi     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#        m_split  : coefficient when the masses of the scattering particles are
+#                   different. It is given by: m_split = 1+(m_1^2-m_2^2)/E_cm^2
+#                   where E_cm^2 is the interacting energy in the cms.
 #        precision: precision of the calculation
 #        verbose  : 0, no output on screen; 1, detailed output with convergence
 #                   informations 
@@ -69,7 +72,7 @@ import scipy.integrate
 #
 ################################################################################
 def Z(q2, gamma = 1.0, l = 0, m = 0, d = np.array([0., 0., 0.]), \
-      precision = 10e-6, verbose = 0):
+      m_split = 1, precision = 10e-6, verbose = 0):
   # some small checks
   if gamma < 1.0:
     print 'Gamma must be larger or equal to 1.0'
@@ -77,9 +80,9 @@ def Z(q2, gamma = 1.0, l = 0, m = 0, d = np.array([0., 0., 0.]), \
   # reading the three momenta for summation from file
   n = np.load("./momenta.npy")
   # the computation
-  res = A(q2, gamma, l, m, d, precision, verbose, n) + \
+  res = A(q2, gamma, l, m, d, precision, verbose, m_split, n) + \
         B(q2, gamma, l, precision, verbose) + \
-        C(q2, gamma, l, m, d, precision, verbose, n)
+        C(q2, gamma, l, m, d, precision, verbose, m_split, n)
   if verbose:
     print 'Luescher Zeta function:', res
   return res
@@ -106,7 +109,7 @@ def appendSpherical_np(xyz):
 # Computes the vector r for the sum in term A and returns it in spherical 
 # coordinates 
 ################################################################################
-def compute_r_in_spherical_coordinates(a, d, gamma):
+def compute_r_in_spherical_coordinates(a, d, gamma, m_split):
   out = np.zeros(a.shape)
   if (np.linalg.norm(d) == 0.0):
     for r, i in zip(a, range(0,a.shape[0])):
@@ -116,7 +119,7 @@ def compute_r_in_spherical_coordinates(a, d, gamma):
     for r, i in zip(a, range(0,a.shape[0])):
       r_p = np.dot(r, d)/np.dot(d,d)*d 
       r_o = r-r_p
-      out[i,:] = (r_p-0.5*d)/gamma + r_o
+      out[i,:] = (r_p-0.5*m_split*d)/gamma + r_o
   return appendSpherical_np(out)
 
 # compute spherical harmonics
@@ -174,10 +177,10 @@ def compute_summands_A(a_sph, q, l, m):
 
 # Computation of term A
 ################################################################################
-def A(q, gamma, l, m, d, precision, verbose, n):
+def A(q, gamma, l, m, d, precision, verbose, m_split, n):
   i = 0
   r, i = return_momentum_array(i, n)
-  r_sph = compute_r_in_spherical_coordinates(r, d, gamma)
+  r_sph = compute_r_in_spherical_coordinates(r, d, gamma, m_split)
   result = compute_summands_A(r_sph, q, l, m)
   if verbose:
     print 'convergence in term A:'
@@ -186,7 +189,7 @@ def A(q, gamma, l, m, d, precision, verbose, n):
   eps = 1
   while (eps > precision):
     r, i = return_momentum_array(i, n)
-    r_sph = compute_r_in_spherical_coordinates(r, d, gamma)
+    r_sph = compute_r_in_spherical_coordinates(r, d, gamma, m_split)
     result_h = compute_summands_A(r_sph, q, l, m)
     eps = abs(result_h/result)
     result += result_h
@@ -235,9 +238,9 @@ integrand = lambda t, q, l, w: ((math.pi/t)**(3./2.+l) ) * np.exp(q*t-w/t)
 
 # Computes a part of the sum in term C
 ################################################################################
-def compute_summands_C(w_sph, w, q, gamma, l, m, d, precision):
-  part1 = gamma * (np.absolute(w_sph[:,0])**l) * \
-          np.exp((-1.j)*math.pi*np.dot(w, d)) * \
+def compute_summands_C(w_sph, w, q, gamma, l, m, d, m_split, precision):
+  part1 = (-1.j)**l * gamma * (np.absolute(w_sph[:,0])**l) * \
+          np.exp((-1.j)*m_split*math.pi*np.dot(w, d)) * \
           sph_harm(m, l, w_sph[:,2], w_sph[:,1])
   # Factor two: The integral 
   part2 = []
@@ -264,11 +267,11 @@ def compute_summands_C(w_sph, w, q, gamma, l, m, d, precision):
 
 # Computation of term C
 ################################################################################
-def C(q, gamma, l, m, d, precision, verbose, n):
+def C(q, gamma, l, m, d, precision, verbose, m_split, n):
   i = 1
   w, i = return_momentum_array(i, n)
   w_sph = compute_gamma_w_in_spherical_coordinates(w, d, gamma)
-  result = compute_summands_C(w_sph, w, q, gamma, l, m, d, precision)
+  result = compute_summands_C(w_sph, w, q, gamma, l, m, d, m_split, precision)
   if verbose:
     print 'convergence in term C:'
     print '\t', i-1, result
@@ -277,7 +280,7 @@ def C(q, gamma, l, m, d, precision, verbose, n):
   while (eps > precision):
     w, i = return_momentum_array(i, n)
     w_sph = compute_gamma_w_in_spherical_coordinates(w, d, gamma)
-    result_h = compute_summands_C(w_sph, w, q, gamma, l, m, d, precision)
+    result_h = compute_summands_C(w_sph, w, q, gamma, l, m, d, m_split, precision)
     eps = abs(result_h/result)
     result += result_h
     if verbose:
@@ -338,8 +341,3 @@ def test():
     delta = 180+delta
   print 'delta:', delta, 'delta should be: 127.9930'
 
-#test()
-counter = 0
-for qq in np.arange(0.00, 0.999, 0.001):
-  print counter, Z(qq)
-  counter += 1
