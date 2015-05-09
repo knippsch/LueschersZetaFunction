@@ -140,7 +140,7 @@ def sph_harm(m = 0, l = 0, phi = 0, theta = 0):
   elif l is 2 and m is  2:
     return 0.38627420202318957*np.sin(theta)*np.sin(theta) * np.exp(2.*1.j*phi)
   else:
-    return scipy.special.sph_harm(m, l, theta, phi)
+    return scipy.special.sph_harm(m, l, phi, theta)
 
 # returns the part of the momentum array for a given momentum squared
 ################################################################################
