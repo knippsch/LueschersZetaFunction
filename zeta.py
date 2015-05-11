@@ -196,8 +196,8 @@ def A(q, gamma, l, m, d, precision, verbose, m_split, n):
     result += result_h
     if verbose:
       print '\t', i-1, result, eps
-    # if reulst is still zero after 4 iterations it is assumed to stay zero
-    if result == 0.0 and i < 5:
+    # if result is still zero after 4 iterations it is assumed to stay zero
+    if result == 0.0 and i > 4:
       break
   if verbose:
     print 'Term A:', result
@@ -291,7 +291,7 @@ def C(q, gamma, l, m, d, precision, verbose, m_split, n):
     if verbose:
       print '\t', i-1, result, eps
     # if result is still zero after 4 iterations it is assumed to stay zero
-    if result == 0.0 and i < 5:
+    if result == 0.0 and i > 4:
       break
   if verbose:
     print 'Term C:', result
