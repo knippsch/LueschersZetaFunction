@@ -196,6 +196,9 @@ def A(q, gamma, l, m, d, precision, verbose, m_split, n):
     result += result_h
     if verbose:
       print '\t', i-1, result, eps
+    # if reulst is still zero after 4 iterations it is assumed to stay zero
+    if result == 0.0 and i < 5:
+      break
   if verbose:
     print 'Term A:', result
   return result
@@ -287,6 +290,9 @@ def C(q, gamma, l, m, d, precision, verbose, m_split, n):
     result += result_h
     if verbose:
       print '\t', i-1, result, eps
+    # if result is still zero after 4 iterations it is assumed to stay zero
+    if result == 0.0 and i < 5:
+      break
   if verbose:
     print 'Term C:', result
   return result
@@ -342,6 +348,4 @@ def test():
   if delta < 0:
     delta = 180+delta
   print 'delta:', delta, 'delta should be: 127.9930'
-
-print Z(0.001, l=3, m=0, verbose = 1)
 
