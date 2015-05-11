@@ -191,7 +191,8 @@ def A(q, gamma, l, m, d, precision, verbose, m_split, n):
     r, i = return_momentum_array(i, n)
     r_sph = compute_r_in_spherical_coordinates(r, d, gamma, m_split)
     result_h = compute_summands_A(r_sph, q, l, m)
-    eps = abs(result_h/result)
+    if result != 0.0:
+      eps = abs(result_h/result)
     result += result_h
     if verbose:
       print '\t', i-1, result, eps
@@ -281,7 +282,8 @@ def C(q, gamma, l, m, d, precision, verbose, m_split, n):
     w, i = return_momentum_array(i, n)
     w_sph = compute_gamma_w_in_spherical_coordinates(w, d, gamma)
     result_h = compute_summands_C(w_sph, w, q, gamma, l, m, d, m_split, precision)
-    eps = abs(result_h/result)
+    if result != 0.0:
+      eps = abs(result_h/result)
     result += result_h
     if verbose:
       print '\t', i-1, result, eps
@@ -340,4 +342,6 @@ def test():
   if delta < 0:
     delta = 180+delta
   print 'delta:', delta, 'delta should be: 127.9930'
+
+print Z(0.001, l=3, m=0, verbose = 1)
 
